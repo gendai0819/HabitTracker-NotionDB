@@ -2,7 +2,7 @@ import os
 import dotenv
 import requests
 
-dotenv.load_dotenv()
+dotenv.load_dotenv("../.env")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 def send_to_discord(content: str):

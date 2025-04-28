@@ -1,9 +1,10 @@
 import requests
 import os
 import dotenv
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
-dotenv.load_dotenv()
+
+dotenv.load_dotenv("../.env")
 
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 DATABASE_ID = os.getenv("DATABASE_ID")
@@ -22,18 +23,22 @@ def fetch_today_data():
         return {}
 
     data = response.json()
-    today_str = date.today().isoformat()
+    
+    JST = timezone(timedelta(hours=9))  # 日本時間のタイムゾーン
+    today_str = datetime.now(JST).date().isoformat()  # 日本時間で今日の日付を取得
     user_to_md = {}
 
     for result in data["results"]:
         props = result["properties"]
+        # print(props)
 
-        # 日付判定（Dayが@今日 or 今日の日付）
-        day_prop = props.get("Day", {}).get("title", [])
-        if not day_prop:
+        # 作成日時から日付判定
+        created_time = props.get("作成日時", {}).get("created_time")
+        if not created_time:
             continue
-        day_text = "".join(part.get("plain_text", "") for part in day_prop)
-        if today_str not in day_text and "@今日" not in day_text:
+        created_date = datetime.fromisoformat(created_time.replace("Z", "+00:00")).astimezone(JST).date()
+        # print(created_date, today_str)
+        if created_date.isoformat() != today_str:
             continue
 
         # ユーザー名の取得
@@ -47,9 +52,11 @@ def fetch_today_data():
         coding = extract_text(props.get("coding", {}))
         tidy = extract_text(props.get("Tidy家事", {}))
         free = extract_text(props.get("free", {}))
+        kiai = extract_text(props.get("気合", {}))
 
         # Markdownフォーマットで構築
         md_parts = []
+        if kiai:    md_parts.append(f"### 気合\n- {kiai}")
         if stretch: md_parts.append(f"### ストレッチ・運動\n- {stretch}")
         if coding:  md_parts.append(f"### コーディング\n- {coding}")
         if tidy:    md_parts.append(f"### 家事\n- {tidy}")
@@ -60,11 +67,43 @@ def fetch_today_data():
     return user_to_md
 
 def extract_text(prop):
-    texts = prop.get("rich_text", [])
+    if prop.get("type") == "title":
+        texts = prop.get("title", [])
+    else:
+        texts = prop.get("rich_text", [])
     return "、".join(t.get("plain_text", "") for t in texts if t.get("plain_text", ""))
-
 
 if __name__ == "__main__":
     user_md_dict = fetch_today_data()
     for user, md in user_md_dict.items():
         print(f"# {user}\n{md}\n{'-'*30}")
+
+
+# import requests
+# import os
+# import dotenv
+# dotenv.load_dotenv("../.env")
+
+
+# NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+# DATABASE_ID = os.getenv("DATABASE_ID")
+
+
+# url = f'https://api.notion.com/v1/databases/{DATABASE_ID}/query'
+
+# headers = {
+#     "Authorization": f"Bearer {NOTION_TOKEN}",
+#     "Notion-Version": "2022-06-28",
+#     "Content-Type": "application/json"
+# }
+# print(NOTION_TOKEN)
+# print(DATABASE_ID)
+
+# response = requests.post(url, headers=headers)
+
+# if response.status_code == 200:
+#     data = response.json()
+#     for result in data["results"]:
+#         print(result["properties"])
+# else:
+#     print("エラー:", response.status_code, response.text)
